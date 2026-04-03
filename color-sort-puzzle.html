@@ -1,0 +1,1639 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description"
+        content="A relaxing color-sorting puzzle game. Sort all tubes so each contains only one color.">
+    <title>Color Sort Puzzle</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='28'>🧪</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg-color: #121212;
+            --text-color: #e0e0e0;
+            --tube-bg: #1e1e1e;
+            --tube-border: #444;
+            --tube-selected: #bb86fc;
+            --primary-color: #3700b3;
+            --primary-hover: #6200ea;
+            --secondary-color: #03dac6;
+            --secondary-hover: #018786;
+            --color-success: #4ADE80;
+            --color-error: #F25C5C;
+            --color-hint: #F5C842;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        body {
+            font-family: 'Oxanium', 'Segoe UI', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: clamp(8px, 3vw, 20px);
+            padding-bottom: 30px;
+            overflow-x: hidden;
+        }
+
+        h1 {
+            font-size: clamp(1.3rem, 5vw, 2rem);
+            margin-bottom: 5px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        p.subtitle {
+            color: #aaaaaa;
+            margin-bottom: clamp(16px, 4vw, 30px);
+            text-align: center;
+            font-size: clamp(0.82rem, 2.5vw, 1rem);
+        }
+
+        #stats {
+            margin-bottom: clamp(12px, 3vw, 20px);
+            font-size: clamp(0.95rem, 3vw, 1.2rem);
+            font-weight: bold;
+            background: var(--tube-bg);
+            padding: 8px 20px;
+            border-radius: 8px;
+            border: 1px solid var(--tube-border);
+        }
+
+        #game-board {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: clamp(6px, 2vw, 16px);
+            margin-bottom: 16px;
+            width: 100%;
+            max-width: min(100%, 520px);
+        }
+
+        @media (max-width: 360px) {
+            #game-board {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: clamp(4px, 1.5vw, 8px);
+            }
+        }
+
+        .tube {
+            width: 100%;
+            height: clamp(90px, 22vw, 190px);
+            border: clamp(2px, 0.4vw, 3px) solid #2a2a3a;
+            border-radius: clamp(8px, 2vw, 16px);
+            background: linear-gradient(160deg, #1c1c2e 0%, #12121e 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-evenly;
+            padding: clamp(4px, 1vw, 8px) clamp(3px, 0.8vw, 6px);
+            gap: clamp(3px, 0.6vw, 5px);
+            cursor: pointer;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+            position: relative;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .tube:focus-visible {
+            outline: 2px solid var(--secondary-color);
+            outline-offset: 4px;
+        }
+
+        .tube.selected {
+            border-color: var(--tube-selected);
+            transform: scale(1.06);
+            box-shadow: 0 0 0 3px rgba(187, 134, 252, 0.45), 0 8px 24px rgba(187, 134, 252, 0.3);
+        }
+
+        .tube.shake {
+            animation: shake 0.32s cubic-bezier(.36, .07, .19, .97) both;
+            border-color: var(--color-error) !important;
+            transform-origin: center;
+        }
+
+        .tube.hint-pulse {
+            animation: hintPulse 1.5s infinite;
+            border-color: var(--color-hint) !important;
+        }
+
+        @keyframes shake {
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            20% {
+                transform: translateX(-6px);
+            }
+
+            40% {
+                transform: translateX(6px);
+            }
+
+            60% {
+                transform: translateX(-4px);
+            }
+
+            80% {
+                transform: translateX(4px);
+            }
+        }
+
+        @keyframes hintPulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(245, 200, 66, 0.7);
+                transform: translateY(0);
+            }
+
+            50% {
+                box-shadow: 0 0 15px 5px rgba(245, 200, 66, 0);
+                transform: translateY(5px);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(245, 200, 66, 0);
+                transform: translateY(0);
+            }
+        }
+
+        .color-block {
+            width: 100%;
+            flex: 1;
+            border-radius: clamp(4px, 1.2vw, 10px);
+            transition: background-color 0.2s ease, box-shadow 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            container-type: size;
+            background-color: rgba(255, 255, 255, 0.04);
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4);
+            min-height: 0;
+        }
+
+        .color-block[style*="background-color"] {
+            box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.25), inset 0 -2px 4px rgba(0, 0, 0, 0.35);
+        }
+
+        .color-label {
+            font-size: 9px;
+            font-weight: bold;
+            color: rgba(0, 0, 0, 0.55);
+            pointer-events: none;
+            user-select: none;
+            display: none;
+        }
+
+        @container (min-height: 18px) {
+            .color-label {
+                display: block;
+            }
+        }
+
+        .controls {
+            display: flex;
+            gap: clamp(6px, 2vw, 15px);
+            margin-top: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+            width: 100%;
+            max-width: 560px;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: clamp(8px, 2vw, 10px) clamp(10px, 3vw, 20px);
+            border-radius: 6px;
+            font-size: clamp(0.82rem, 2.2vw, 1rem);
+            font-family: inherit;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s, opacity 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            min-height: 40px;
+        }
+
+        button:hover:not(:disabled) {
+            background-color: var(--primary-hover);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background-color: var(--secondary-color);
+            color: #000;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background-color: var(--secondary-hover);
+            color: #fff;
+        }
+
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* .swatch styles moved to editor section below */
+
+        #message {
+            margin-top: 20px;
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--color-success);
+            min-height: 24px;
+            text-align: center;
+        }
+
+        #message:empty {
+            margin-top: 0;
+            min-height: 0;
+        }
+
+        #playback-controls {
+            display: none;
+            width: 100%;
+            max-width: 400px;
+            background: var(--tube-bg);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--tube-border);
+            margin-top: 15px;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #playback-slider {
+            width: 100%;
+            margin: 10px 0;
+            appearance: none;
+            height: 6px;
+            background: #444;
+            border-radius: 4px;
+            outline: none;
+        }
+
+        #playback-slider::-webkit-slider-thumb {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--secondary-color);
+            cursor: pointer;
+        }
+
+        .playback-buttons {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .btn-icon {
+            background: transparent;
+            border: 1px solid var(--tube-border);
+            color: var(--text-color);
+            padding: 5px 12px;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-icon:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        #playback-step-text {
+            font-family: monospace;
+            font-size: 1.1rem;
+            min-width: 80px;
+            text-align: center;
+        }
+
+        #win-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.35s ease;
+        }
+
+        #win-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .win-card {
+            background: var(--bg-color);
+            border: 2px solid var(--primary-color);
+            padding: 30px 40px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+            transform: scale(0.8);
+            transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+            position: relative;
+            z-index: 10;
+        }
+
+        #win-overlay.active .win-card {
+            transform: scale(1);
+        }
+
+        .win-card h2 {
+            font-size: 2rem;
+            color: var(--color-success);
+            margin-bottom: 10px;
+        }
+
+        .win-card p {
+            font-size: 1.2rem;
+            margin-bottom: 25px;
+        }
+
+        .win-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            top: -10px;
+            animation: fall linear forwards;
+            pointer-events: none;
+        }
+
+        @keyframes fall {
+            to {
+                transform: translateY(100vh) rotate(360deg);
+            }
+        }
+
+        /* ===== LEVEL EDITOR ===== */
+
+        /* In edit mode: hide game header/stats */
+        body.edit-mode h1,
+        body.edit-mode p.subtitle,
+        body.edit-mode #stats {
+            display: none !important;
+        }
+
+        /* Show editor elements */
+        body.edit-mode #editor-toolbar {
+            display: flex;
+        }
+
+        body.edit-mode #editor-bottom-bar {
+            display: flex;
+        }
+
+        /* Hide unused game buttons in edit mode */
+        body.edit-mode #btn-restart,
+        body.edit-mode #btn-new,
+        body.edit-mode #btn-undo,
+        body.edit-mode #btn-solve,
+        body.edit-mode #btn-hint {
+            display: none !important;
+        }
+
+        /* ── Slim title strip ── */
+        #editor-toolbar {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 10px;
+            width: 100%;
+            max-width: 560px;
+            background: #16162a;
+            border: 1px solid #2e2e4e;
+            border-radius: 10px;
+            padding: 9px 16px;
+        }
+
+        .editor-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #c084fc;
+            letter-spacing: 0.5px;
+        }
+
+        /* ── Bottom bar (palette + tool + settings) ── */
+        #editor-bottom-bar {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            margin-top: 12px;
+            width: 100%;
+            max-width: 560px;
+            background: #16162a;
+            border: 1px solid #2e2e4e;
+            border-radius: 14px;
+            padding: clamp(10px, 3vw, 16px);
+        }
+
+        /* ── Palette row: horizontal, wraps on small screens ── */
+        .editor-palette-row {
+            width: 100%;
+        }
+
+        #palette {
+            display: flex;
+            flex-wrap: wrap;
+            gap: clamp(5px, 1.5vw, 8px);
+            justify-content: center;
+        }
+
+        .swatch {
+            width: clamp(30px, 7.5vw, 42px);
+            height: clamp(30px, 7.5vw, 42px);
+            border-radius: clamp(5px, 1.2vw, 8px);
+            cursor: pointer;
+            border: 2px solid transparent;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+            transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: clamp(0.55rem, 1.6vw, 0.75rem);
+            color: rgba(0, 0, 0, 0.6);
+            touch-action: manipulation;
+            user-select: none;
+        }
+
+        .swatch:hover {
+            transform: scale(1.1);
+        }
+
+        .swatch.selected {
+            border-color: #fff;
+            transform: scale(1.15);
+            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.25), 0 4px 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .swatch.selected::after {
+            content: '✓';
+            position: absolute;
+            bottom: -2px;
+            right: -2px;
+            background: white;
+            color: #111;
+            width: 13px;
+            height: 13px;
+            border-radius: 50%;
+            font-size: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 13px;
+            pointer-events: none;
+        }
+
+        .swatch-erase {
+            background: #1e1e2e !important;
+            border: 2px dashed #554 !important;
+            color: #f87171 !important;
+            font-size: 0.9rem !important;
+            font-weight: 900;
+        }
+
+        /* ── Active tool indicator ── */
+        .editor-tool-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            flex-wrap: wrap;
+        }
+
+        .editor-selected-tool {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #0f0f1e;
+            border: 1px solid #2e2e4e;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 0.82rem;
+            flex: 1;
+            min-height: 36px;
+        }
+
+        .tool-label {
+            color: #555;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            white-space: nowrap;
+        }
+
+        #active-tool-name {
+            font-weight: 600;
+            color: #c084fc;
+            font-size: 0.78rem;
+        }
+
+        .edit-validation-msg {
+            font-size: 0.78rem;
+            font-weight: 600;
+            min-height: 20px;
+            text-align: center;
+            border-radius: 6px;
+            padding: 3px 8px;
+            flex: 1;
+        }
+
+        /* ── Collapsible settings ── */
+        .editor-settings-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            padding: 8px 12px;
+            background: #0f0f1e;
+            border: 1px solid #2e2e4e;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.82rem;
+            color: #888;
+            user-select: none;
+            transition: background 0.15s, color 0.15s;
+        }
+
+        .editor-settings-toggle:hover {
+            background: #1a1a30;
+            color: #c084fc;
+        }
+
+        .toggle-arrow {
+            font-size: 0.7rem;
+        }
+
+        #editor-settings-panel {
+            display: none;
+            width: 100%;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        #editor-settings-panel.open {
+            display: flex;
+            animation: slideDown 0.2s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-6px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .editor-actions {
+            display: flex;
+            gap: 12px;
+            width: 100%;
+            align-items: flex-start;
+        }
+
+        .editor-textarea-wrap {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .textarea-label {
+            font-size: 0.72rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        #level-text-input {
+            font-family: monospace;
+            font-size: 0.9rem;
+            padding: 10px;
+            resize: none;
+            background: #0f0f1e;
+            color: var(--text-color);
+            border: 1px solid #2e2e4e;
+            border-radius: 8px;
+            width: 100%;
+            letter-spacing: 2px;
+            line-height: 1.7;
+        }
+
+        #level-text-input:focus {
+            outline: none;
+            border-color: #c084fc;
+        }
+
+        .btn-sm {
+            padding: 6px 12px !important;
+            font-size: 0.8rem !important;
+            min-height: 32px !important;
+        }
+
+        .editor-side-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding-top: 24px;
+        }
+
+        .btn-danger {
+            background-color: #2a1010;
+            color: #f87171;
+            border: 1px solid #4a2020;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background-color: #4a1a1a;
+            color: #fca5a5;
+        }
+
+        @media (max-width: 400px) {
+            .editor-actions {
+                flex-direction: column;
+            }
+
+            .editor-side-actions {
+                padding-top: 0;
+                flex-direction: row;
+            }
+
+            #editor-bottom-bar {
+                padding: 10px;
+                gap: 8px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Color Sort Puzzle</h1>
+    <p class="subtitle">Sort all colors so each tube contains only one color.</p>
+
+    <div id="stats">
+        Moves: <span id="move-count">0</span>
+    </div>
+
+    <!-- Slim title strip, visible only in edit mode -->
+    <div id="editor-toolbar">
+        <span class="editor-title">✏️ Level Editor</span>
+    </div>
+
+    <div id="game-board"></div>
+
+    <div id="message" role="status" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Bottom editor bar: palette + active tool + collapsible settings -->
+    <div id="editor-bottom-bar">
+        <div class="editor-palette-row">
+            <div id="palette"></div>
+        </div>
+        <div class="editor-tool-row">
+            <div class="editor-selected-tool" id="selected-tool-display">
+                <span class="tool-label">Active:</span>
+                <span id="active-tool-name">None — pick a color above</span>
+            </div>
+            <div id="edit-message" class="edit-validation-msg"></div>
+        </div>
+        <div class="editor-settings-toggle" id="editor-settings-toggle" onclick="toggleEditorSettings()">
+            <span>⚙️ Layout Settings</span>
+            <span class="toggle-arrow" id="settings-arrow">▼</span>
+        </div>
+        <div id="editor-settings-panel">
+            <div class="editor-actions">
+                <div class="editor-textarea-wrap">
+                    <label class="textarea-label">Raw Layout (edit directly)</label>
+                    <textarea id="level-text-input" rows="10" placeholder="V G R B&#10;_ _ _ _"></textarea>
+                    <button id="btn-apply-text" class="btn-secondary btn-sm">⟳ Apply Text</button>
+                </div>
+                <div class="editor-side-actions">
+                    <button id="btn-clear" class="btn-danger">🗑 Clear</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button id="btn-restart">Restart Level</button>
+        <button id="btn-new">New Game</button>
+        <button id="btn-undo" class="btn-secondary" disabled>Undo</button>
+        <button id="btn-hint" class="btn-secondary">Hint</button>
+        <button id="btn-solve" class="btn-secondary">Show Optimal Play</button>
+        <button id="btn-edit" class="btn-secondary">Level Editor</button>
+    </div>
+
+    <div id="playback-controls">
+        <div style="width: 100%; display: flex; justify-content: space-between; font-size: 0.9em; color: #aaa;">
+            <span>Start</span>
+            <span>Finish</span>
+        </div>
+        <input type="range" id="playback-slider" min="0" max="0" value="0">
+        <div class="playback-buttons">
+            <button id="btn-play-pause" class="btn-icon">▶</button>
+            <button id="btn-step-prev" class="btn-icon">◀</button>
+            <span id="playback-step-text">0 / 0</span>
+            <button id="btn-step-next" class="btn-icon">▶</button>
+            <button id="btn-close-playback" class="btn-secondary"
+                style="margin-left: 10px; padding: 5px 10px;">Exit</button>
+        </div>
+    </div>
+
+    <div id="win-overlay" aria-hidden="true">
+        <div class="win-card">
+            <h2>🎉 Puzzle Solved!</h2>
+            <p>In <span id="win-moves">0</span> moves</p>
+            <div class="win-buttons">
+                <button id="btn-win-replay" class="btn-secondary">Play Again</button>
+                <button id="btn-win-restart">Restart</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const COLOR_CONFIG = [
+            { hex: '#ffff21', label: 'Y', name: 'yellow' },
+            { hex: '#840984', label: 'P', name: 'purple' },
+            { hex: '#00E5FF', label: 'C', name: 'cyan' },
+            { hex: '#E040FB', label: 'M', name: 'magenta' },
+            { hex: '#0707ff', label: 'B', name: 'blue' },
+            { hex: '#0bff0b', label: 'G', name: 'green' },
+            { hex: '#FF9100', label: 'O', name: 'orange' },
+            { hex: '#FF1744', label: 'R', name: 'red' },
+            { hex: '#C0C0C0', label: 'W', name: 'grey' },
+            { hex: '#6f71f2', label: 'L', name: 'lavender' },
+        ];
+        // const COLOR_CONFIG = [
+        //     { hex: '#7C6AF7', label: 'V', name: 'soft violet' },
+        //     { hex: '#3ECF72', label: 'G', name: 'vivid green' },
+        //     { hex: '#F97B3C', label: 'O', name: 'warm orange' },
+        //     { hex: '#22D3EE', label: 'C', name: 'sky cyan' },
+        //     { hex: '#F25C5C', label: 'R', name: 'coral red' },
+        //     { hex: '#94A3B8', label: 'S', name: 'slate grey' },
+        //     { hex: '#F5C842', label: 'Y', name: 'golden yellow' },
+        //     { hex: '#F472B6', label: 'P', name: 'hot pink' },
+        //     { hex: '#3B82F6', label: 'B', name: 'pure blue' },
+        //     { hex: '#C084FC', label: 'L', name: 'light purple' }
+        // ];
+        const COLORS = COLOR_CONFIG.map(c => c.hex);
+
+        function getColorLabel(hex) {
+            let cfg = COLOR_CONFIG.find(c => c.hex.toLowerCase() === hex.toLowerCase());
+            return cfg ? cfg.label : '';
+        }
+
+        function getColorName(hex) {
+            let cfg = COLOR_CONFIG.find(c => c.hex.toLowerCase() === hex.toLowerCase());
+            return cfg ? cfg.name : 'color';
+        }
+
+        const TUBE_COUNT = 12;
+        const TUBE_CAPACITY = 4;
+
+        let gameState = [];
+        let initialGameState = [];
+        let moveHistory = [];
+        let selectedTubeIndex = null;
+        let shakingTubeIndex = null;
+        let moves = 0;
+
+        let isSolving = false;
+        let solveInterval = null;
+        let solveTimeout = null;
+        let currentSolveAction = null;
+        let solveGeneration = 0;
+
+        let isEditMode = false;
+        let editSelectedColor = null;
+
+        let solutionPath = [];
+        let playbackStateHistory = [];
+        let currentPlaybackStep = 0;
+        let isPlaybackPlaying = false;
+        let isPlaybackMode = false;
+
+        const solverWorkerCode = `
+            function cloneState(state) {
+                return state.map(t => t.slice());
+            }
+
+        function isSolved(state) {
+            for (let i = 0; i < state.length; i++) {
+                let t = state[i];
+                if (t.length > 0) {
+                    if (t.length !== 4) return false;
+                    let c0 = t[0];
+                    for (let j = 1; j < 4; j++) if (t[j] !== c0) return false;
+                }
+            }
+            return true;
+        }
+
+        function getCode(state) {
+            let s = new Array(state.length);
+            for (let i = 0; i < state.length; i++) s[i] = state[i].join('');
+            s.sort();
+            return s.join('|');
+        }
+
+        function solve(initialState) {
+            let queue = [initialState];
+            let visited = new Map();
+            visited.set(getCode(initialState), null);
+
+            let head = 0;
+            const MAX_STATES = 200000;
+
+            while (head < queue.length && visited.size < MAX_STATES) {
+                let curr = queue[head++];
+                let currCode = getCode(curr);
+
+                if (isSolved(curr)) {
+                    let path = [];
+                    let trace = currCode;
+                    while (visited.get(trace) !== null) {
+                        let node = visited.get(trace);
+                        path.push(node.move);
+                        trace = node.parentCode;
+                    }
+                    return { path: path.reverse(), statesExplored: visited.size };
+                }
+
+                for (let i = 0; i < curr.length; i++) {
+                    let src = curr[i];
+                    if (src.length === 0) continue;
+
+                    for (let j = 0; j < curr.length; j++) {
+                        if (i === j) continue;
+                        let dst = curr[j];
+
+                        if (dst.length === 4) continue;
+
+                        if (dst.length === 0 || dst[dst.length - 1] === src[src.length - 1]) {
+                            let nextState = cloneState(curr);
+                            let color = nextState[i][nextState[i].length - 1];
+                            while (nextState[i].length > 0 && nextState[i][nextState[i].length - 1] === color && nextState[j].length < 4) {
+                                nextState[j].push(nextState[i].pop());
+                            }
+
+                            let code = getCode(nextState);
+                            if (!visited.has(code)) {
+                                visited.set(code, { parentCode: currCode, move: { from: i, to: j } });
+                                queue.push(nextState);
+                            }
+                        }
+                    }
+                }
+            }
+            return { path: null, statesExplored: visited.size };
+        }
+
+        self.onmessage = function (e) {
+            let res = solve(e.data);
+            self.postMessage(res);
+        };
+        `;
+
+        function createWorker() {
+            if (window.solverWorker) {
+                window.solverWorker.terminate();
+            }
+            const solverBlob = new Blob([solverWorkerCode], { type: 'application/javascript' });
+            window.solverWorker = new Worker(URL.createObjectURL(solverBlob));
+            window.solverWorker.onmessage = handleWorkerMessage;
+        }
+
+        function initialUpdate() {
+            updateMessage('');
+            document.getElementById('move-count').textContent = moves;
+        }
+
+        function clearHistory() {
+            moveHistory = [];
+            document.getElementById('btn-undo').disabled = true;
+        }
+
+        function pushHistory() {
+            moveHistory.push(JSON.parse(JSON.stringify(gameState)));
+            document.getElementById('btn-undo').disabled = false;
+        }
+
+        function restoreUndoState() {
+            if (moveHistory.length === 0) return;
+            gameState = moveHistory.pop();
+            moves--;
+            document.getElementById('move-count').textContent = moves;
+            selectedTubeIndex = null;
+            document.getElementById('btn-undo').disabled = moveHistory.length === 0;
+            render();
+        }
+
+        function initGame() {
+            solveGeneration++;
+            clearSolveExecution();
+            clearHistory();
+
+            let solvedState = [];
+            for (let i = 0; i < COLORS.length; i++) {
+                solvedState.push([COLORS[i], COLORS[i], COLORS[i], COLORS[i]]);
+            }
+            solvedState.push([]);
+            solvedState.push([]);
+
+            gameState = JSON.parse(JSON.stringify(solvedState));
+            shuffle(gameState);
+
+            initialGameState = JSON.parse(JSON.stringify(gameState));
+            selectedTubeIndex = null;
+            moves = 0;
+            initialUpdate();
+            render();
+        }
+
+        function restartGame() {
+            solveGeneration++;
+            clearSolveExecution();
+            clearHistory();
+            gameState = JSON.parse(JSON.stringify(initialGameState));
+            selectedTubeIndex = null;
+            moves = 0;
+            initialUpdate();
+            render();
+        }
+
+        function shuffle(state) {
+            const iterations = 60;
+            for (let i = 0; i < iterations; i++) {
+                const fromIdx = Math.floor(Math.random() * TUBE_COUNT);
+                const toIdx = Math.floor(Math.random() * TUBE_COUNT);
+
+                if (fromIdx !== toIdx && state[fromIdx].length > 0 && state[toIdx].length < TUBE_CAPACITY) {
+                    const color = state[fromIdx].pop();
+                    state[toIdx].push(color);
+                }
+            }
+        }
+
+        function render() {
+            const board = document.getElementById('game-board');
+            board.innerHTML = '';
+
+            gameState.forEach((tubeContents, tubeIndex) => {
+                const tubeEl = document.createElement('div');
+                tubeEl.className = 'tube';
+                if (selectedTubeIndex === tubeIndex) {
+                    tubeEl.classList.add('selected');
+                }
+                if (shakingTubeIndex === tubeIndex) {
+                    tubeEl.classList.add('shake');
+                }
+
+                for (let i = 0; i < TUBE_CAPACITY; i++) {
+                    const block = document.createElement('div');
+                    block.className = 'color-block';
+
+                    let logicalIndex = i;
+                    let color = tubeContents[logicalIndex];
+
+                    if (color) {
+                        block.style.backgroundColor = color;
+                        const labelSpan = document.createElement('span');
+                        labelSpan.className = 'color-label';
+                        labelSpan.textContent = getColorLabel(color);
+                        block.appendChild(labelSpan);
+                    } else if (isEditMode) {
+                        block.style.border = '1px dashed #555';
+                    }
+
+                    if (isEditMode) {
+                        block.style.cursor = 'crosshair';
+                        block.style.minHeight = `calc((100% - 12px) / ${TUBE_CAPACITY})`;
+                        block.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            handleBlockEdit(tubeIndex, logicalIndex);
+                        });
+                    }
+
+                    tubeEl.appendChild(block);
+                }
+
+                if (!isEditMode) {
+                    tubeEl.tabIndex = 0;
+                    tubeEl.setAttribute('role', 'button');
+
+                    let visualArr = [];
+                    for (let i = 0; i < TUBE_CAPACITY; i++) {
+                        if (i < tubeContents.length) {
+                            visualArr.push(getColorName(tubeContents[i]));
+                        } else {
+                            visualArr.push('empty');
+                        }
+                    }
+                    tubeEl.setAttribute('aria-label', `Tube ${tubeIndex + 1}: ${visualArr.join(', ')}`);
+
+                    tubeEl.addEventListener('click', () => handleTubeClick(tubeIndex));
+                    tubeEl.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleTubeClick(tubeIndex);
+                        }
+                    });
+                }
+                board.appendChild(tubeEl);
+            });
+        }
+
+        function handleBlockEdit(tubeIndex, logicalIndex) {
+            if (!isEditMode) return;
+            // Preserve exact slot positions — expand to 4-slot array with nulls
+            let tube = gameState[tubeIndex];
+            let fullTube = Array.from({ length: TUBE_CAPACITY }, (_, i) => tube[i] || null);
+
+            if (editSelectedColor === 'erase') {
+                fullTube[logicalIndex] = null;
+            } else if (editSelectedColor) {
+                fullTube[logicalIndex] = editSelectedColor;
+            }
+
+            // Store with nulls intact — compact only when exiting edit mode
+            gameState[tubeIndex] = fullTube;
+            document.getElementById('level-text-input').value = stateToText();
+            render();
+            checkEditValidation();
+        }
+
+        function handleTubeClick(tubeIndex) {
+            if (isEditMode || isPlaybackMode || isSolving) return;
+
+            if (checkWin()) return;
+
+            if (selectedTubeIndex === null) {
+                if (gameState[tubeIndex].length > 0) {
+                    selectedTubeIndex = tubeIndex;
+                    render();
+                }
+            } else {
+                if (selectedTubeIndex === tubeIndex) {
+                    selectedTubeIndex = null;
+                    render();
+                } else {
+                    const fromTube = gameState[selectedTubeIndex];
+                    const toTube = gameState[tubeIndex];
+
+                    if (isValidMove(fromTube, toTube)) {
+                        pushHistory();
+                        pour(fromTube, toTube);
+                        moves++;
+                        document.getElementById('move-count').textContent = moves;
+                        selectedTubeIndex = null;
+                        render();
+
+                        if (checkWin()) {
+                            showWinCelebration();
+                        }
+                    } else {
+                        // Invalid move
+                        shakingTubeIndex = selectedTubeIndex;
+                        let currentSelected = selectedTubeIndex;
+                        setTimeout(() => {
+                            if (shakingTubeIndex === currentSelected) shakingTubeIndex = null;
+                            let el = document.querySelectorAll('.tube')[currentSelected];
+                            if (el) el.classList.remove('shake');
+                        }, 320);
+
+                        if (gameState[tubeIndex].length > 0 && selectedTubeIndex !== tubeIndex) {
+                            selectedTubeIndex = tubeIndex;
+                        }
+                        render();
+                    }
+                }
+            }
+        }
+
+        function isValidMove(fromTube, toTube) {
+            if (fromTube.length === 0) return false;
+            if (toTube.length === TUBE_CAPACITY) return false;
+            if (toTube.length === 0) return true;
+            return fromTube[fromTube.length - 1] === toTube[toTube.length - 1];
+        }
+
+        function pour(fromTube, toTube) {
+            const colorToMove = fromTube[fromTube.length - 1];
+            while (
+                fromTube.length > 0 &&
+                fromTube[fromTube.length - 1] === colorToMove &&
+                toTube.length < TUBE_CAPACITY
+            ) {
+                toTube.push(fromTube.pop());
+            }
+        }
+
+        function checkWin() {
+            for (let tube of gameState) {
+                if (tube.length > 0) {
+                    if (tube.length !== TUBE_CAPACITY) return false;
+                    const firstColor = tube[0];
+                    if (!tube.every(c => c === firstColor)) return false;
+                }
+            }
+            return true;
+        }
+
+        function updateMessage(msg) {
+            document.getElementById('message').textContent = msg;
+        }
+
+        function showWinCelebration() {
+            updateMessage("");
+            const overlay = document.getElementById('win-overlay');
+            overlay.querySelectorAll('.confetti').forEach(e => e.remove());
+
+            for (let i = 0; i < 30; i++) {
+                let conf = document.createElement('span');
+                conf.className = 'confetti';
+                conf.style.backgroundColor = COLORS[Math.floor(Math.random() * COLORS.length)];
+                conf.style.left = Math.random() * 100 + 'vw';
+                conf.style.animationDuration = (Math.random() * 2 + 2) + 's';
+                conf.style.animationDelay = (Math.random() * 0.5) + 's';
+                overlay.appendChild(conf);
+            }
+            document.getElementById('win-moves').textContent = moves;
+            overlay.classList.add('active');
+        }
+
+        function hideWinCelebration() {
+            document.getElementById('win-overlay').classList.remove('active');
+        }
+
+        document.getElementById('btn-restart').addEventListener('click', restartGame);
+        document.getElementById('btn-new').addEventListener('click', initGame);
+        document.getElementById('btn-undo').addEventListener('click', restoreUndoState);
+        document.getElementById('btn-win-replay').addEventListener('click', () => { hideWinCelebration(); initGame(); });
+        document.getElementById('btn-win-restart').addEventListener('click', () => { hideWinCelebration(); restartGame(); });
+
+        document.getElementById('btn-solve').addEventListener('click', () => {
+            if (isSolving || checkWin()) return;
+            let btn = document.getElementById('btn-solve');
+            btn.innerHTML = 'Calculating... <div class="spinner"></div>';
+            startSolverWorker('playback', "Puzzle too complex to solve automatically. Try a fresh game.");
+        });
+
+        document.getElementById('btn-hint').addEventListener('click', () => {
+            if (isSolving || checkWin()) return;
+            let btn = document.getElementById('btn-hint');
+            btn.innerHTML = 'Hint <div class="spinner"></div>';
+            startSolverWorker('hint', "Puzzle too complex. No hint available.");
+        });
+
+        function stateToText() {
+            return gameState.map(tube => {
+                let padded = [...tube];
+                while (padded.length < TUBE_CAPACITY) padded.push(null);
+                return padded.map(c => c ? getColorLabel(c) : '_').join(' ');
+            }).join('\n');
+        }
+
+        function textToState(text) {
+            let lines = text.trim().split('\n');
+            let newState = Array.from({ length: TUBE_COUNT }, () => []);
+            for (let i = 0; i < lines.length && i < TUBE_COUNT; i++) {
+                let chars = lines[i].replace(/\s/g, '').split('');
+                let tubeState = [];
+                for (let j = 0; j < chars.length && j < TUBE_CAPACITY; j++) {
+                    let char = chars[j].toUpperCase();
+                    if (char !== '_' && char !== '-') {
+                        let cfg = COLOR_CONFIG.find(c => c.label.toUpperCase() === char);
+                        if (cfg) {
+                            tubeState.push(cfg.hex);
+                        } else {
+                            tubeState.push(null);
+                        }
+                    } else {
+                        tubeState.push(null);
+                    }
+                }
+                newState[i] = tubeState.filter(c => c !== null);
+            }
+            return newState;
+        }
+
+        document.getElementById('btn-edit').addEventListener('click', toggleEditMode);
+        document.getElementById('btn-clear').addEventListener('click', () => {
+            gameState = Array.from({ length: TUBE_COUNT }, () => Array(TUBE_CAPACITY).fill(null));
+            document.getElementById('level-text-input').value = stateToText();
+            render();
+            checkEditValidation();
+        });
+
+        document.getElementById('btn-apply-text').addEventListener('click', () => {
+            gameState = textToState(document.getElementById('level-text-input').value);
+            document.getElementById('level-text-input').value = stateToText();
+            render();
+            checkEditValidation();
+        });
+
+        document.getElementById('level-text-input').addEventListener('input', (e) => {
+            gameState = textToState(e.target.value);
+            render();
+            checkEditValidation();
+        });
+
+        const paletteEl = document.getElementById('palette');
+        COLORS.forEach(c => {
+            let sw = document.createElement('div');
+            sw.className = 'swatch';
+            sw.style.backgroundColor = c;
+            const cfg = COLOR_CONFIG.find(cc => cc.hex === c);
+            sw.textContent = cfg ? cfg.label : '';
+            sw.title = cfg ? cfg.name : c;
+            sw.onclick = () => selectSwatch(c, sw);
+            paletteEl.appendChild(sw);
+        });
+        let eraseSw = document.createElement('div');
+        eraseSw.className = 'swatch swatch-erase';
+        eraseSw.textContent = '✕';
+        eraseSw.title = 'Eraser — click a filled slot to clear it';
+        eraseSw.onclick = () => selectSwatch('erase', eraseSw);
+        paletteEl.appendChild(eraseSw);
+
+        function selectSwatch(color, el) {
+            editSelectedColor = color;
+            document.querySelectorAll('.swatch').forEach(s => s.classList.remove('selected'));
+            el.classList.add('selected');
+
+            const toolNameEl = document.getElementById('active-tool-name');
+            const existingDot = document.getElementById('active-tool-swatch');
+            if (existingDot) existingDot.remove();
+
+            if (color === 'erase') {
+                toolNameEl.textContent = 'Eraser — click a filled slot to clear it';
+                toolNameEl.style.color = '#f87171';
+            } else {
+                const cfg = COLOR_CONFIG.find(c => c.hex.toLowerCase() === color.toLowerCase());
+                const dot = document.createElement('span');
+                dot.id = 'active-tool-swatch';
+                dot.style.cssText = 'width:14px;height:14px;border-radius:3px;display:inline-block;margin-right:6px;vertical-align:middle;background:' + color + ';';
+                toolNameEl.textContent = cfg ? cfg.name : color;
+                toolNameEl.style.color = '#c084fc';
+                toolNameEl.parentNode.insertBefore(dot, toolNameEl);
+            }
+        }
+
+        function toggleEditorSettings() {
+            const panel = document.getElementById('editor-settings-panel');
+            const toggle = document.getElementById('editor-settings-toggle');
+            const arrow = document.getElementById('settings-arrow');
+            const isOpen = panel.classList.toggle('open');
+            arrow.textContent = isOpen ? '▲' : '▼';
+            toggle.classList.toggle('open-border', isOpen);
+        }
+
+        function toggleEditMode() {
+            isEditMode = !isEditMode;
+            const editorToolbar = document.getElementById('editor-toolbar');
+            const btnEdit = document.getElementById('btn-edit');
+
+            if (isEditMode) {
+                clearHistory();
+                clearSolveExecution();
+                document.body.classList.add('edit-mode');
+                btnEdit.textContent = 'Play Custom Level';
+                btnEdit.classList.remove('btn-secondary');
+                updateMessage('');
+                selectedTubeIndex = null;
+                if (!editSelectedColor) {
+                    editSelectedColor = null;
+                    document.querySelectorAll('.swatch').forEach(s => s.classList.remove('selected'));
+                }
+                // Expand all tubes to 4-slot arrays so clicked slot === stored slot
+                for (let i = 0; i < gameState.length; i++) {
+                    gameState[i] = Array.from({ length: TUBE_CAPACITY }, (_, j) => gameState[i][j] || null);
+                }
+                document.getElementById('level-text-input').value = stateToText();
+                checkEditValidation();
+                render();
+            } else {
+                document.body.classList.remove('edit-mode');
+                btnEdit.textContent = 'Level Editor';
+                btnEdit.classList.add('btn-secondary');
+                document.getElementById('btn-restart').style.display = 'flex';
+                document.getElementById('btn-new').style.display = 'flex';
+                document.getElementById('btn-undo').style.display = 'flex';
+                document.getElementById('btn-solve').style.display = 'flex';
+                document.getElementById('btn-hint').style.display = 'flex';
+
+                for (let i = 0; i < gameState.length; i++) {
+                    gameState[i] = gameState[i].filter(c => c !== null).slice(0, TUBE_CAPACITY);
+                }
+
+                initialGameState = JSON.parse(JSON.stringify(gameState));
+                moves = 0;
+                initialUpdate();
+                render();
+            }
+        }
+
+        function checkEditValidation() {
+            const msgEl = document.getElementById('edit-message');
+            let counts = {};
+            let total = 0;
+            for (let tube of gameState) {
+                for (let c of tube) {
+                    if (!c) continue;
+                    counts[c] = (counts[c] || 0) + 1;
+                    total++;
+                }
+            }
+
+            if (total === 0) {
+                msgEl.textContent = "Board is empty. Fill tubes to create a puzzle.";
+                msgEl.style.color = "#ffb86c";
+                return;
+            }
+
+            for (let c of COLORS) {
+                if (counts[c] && counts[c] !== 4) {
+                    msgEl.textContent = `Warning! Color ${getColorName(c)} has ${counts[c]} blocks (should be exactly 4).`;
+                    msgEl.style.color = "#ff5555";
+                    return;
+                }
+            }
+
+            if (total !== COLORS.length * 4) {
+                msgEl.textContent = `Warning! You have ${total} blocks total (game normally expects exactly ${COLORS.length * 4}).`;
+                msgEl.style.color = "#ff5555";
+                return;
+            }
+
+            msgEl.textContent = "Configuration is valid for normal play!";
+            msgEl.style.color = "var(--color-success)";
+        }
+
+        function clearSolveExecution() {
+            isSolving = false;
+            currentSolveAction = null;
+            clearTimeout(solveTimeout);
+
+            let btnSolve = document.getElementById('btn-solve');
+            btnSolve.textContent = 'Show Optimal Play';
+            btnSolve.disabled = false;
+
+            let btnHint = document.getElementById('btn-hint');
+            btnHint.textContent = 'Hint';
+            btnHint.disabled = false;
+
+            document.getElementById('btn-new').disabled = false;
+            document.getElementById('btn-restart').disabled = false;
+
+            if (solveInterval) {
+                clearInterval(solveInterval);
+                solveInterval = null;
+            }
+            if (isPlaybackPlaying) {
+                togglePlaybackPlay();
+            }
+            selectedTubeIndex = null;
+        }
+
+        function startSolverWorker(actionStr, timeoutMsg) {
+            isSolving = true;
+            solveGeneration++;
+            currentSolveAction = actionStr;
+            const currentGen = solveGeneration;
+
+            document.getElementById('btn-new').disabled = true;
+            document.getElementById('btn-restart').disabled = true;
+            document.getElementById('btn-hint').disabled = true;
+            document.getElementById('btn-solve').disabled = true;
+
+            let startState = JSON.parse(JSON.stringify(gameState));
+            window.solverWorker.postMessage(startState);
+
+            solveTimeout = setTimeout(() => {
+                if (isSolving && solveGeneration === currentGen) {
+                    window.solverWorker.terminate();
+                    createWorker();
+                    clearSolveExecution();
+                    updateMessage(timeoutMsg);
+                }
+            }, 12000);
+        }
+
+        function handleWorkerMessage(e) {
+            if (!isSolving) return;
+            let path = e.data ? e.data.path : null;
+            let statesExplored = e.data ? e.data.statesExplored : 0;
+
+            if (currentSolveAction === 'playback') {
+                if (!path) {
+                    updateMessage(`No solution found! Explored ${statesExplored} states. Ensure it is solvable.`);
+                    clearSolveExecution();
+                    return;
+                }
+                if (path.length === 0) {
+                    updateMessage(`Already solved! (0 states explored)`);
+                    clearSolveExecution();
+                    return;
+                }
+                solutionPath = path;
+                playbackStateHistory = [JSON.parse(JSON.stringify(gameState))];
+                let simState = JSON.parse(JSON.stringify(gameState));
+                for (let move of path) {
+                    let colorToMove = simState[move.from][simState[move.from].length - 1];
+                    while (
+                        simState[move.from].length > 0 &&
+                        simState[move.from][simState[move.from].length - 1] === colorToMove &&
+                        simState[move.to].length < TUBE_CAPACITY
+                    ) {
+                        simState[move.to].push(simState[move.from].pop());
+                    }
+                    playbackStateHistory.push(JSON.parse(JSON.stringify(simState)));
+                }
+                enterPlaybackMode(statesExplored);
+            } else if (currentSolveAction === 'hint') {
+                clearSolveExecution();
+                if (!path || path.length === 0) {
+                    updateMessage("No hint available");
+                } else {
+                    updateMessage("");
+                    let firstMove = path[0];
+                    let fromTube = document.querySelectorAll('.tube')[firstMove.from];
+                    if (fromTube) {
+                        fromTube.classList.add('hint-pulse');
+                        setTimeout(() => fromTube.classList.remove('hint-pulse'), 1500);
+                    }
+                }
+            }
+        }
+
+        function enterPlaybackMode(statesExplored) {
+            isSolving = false;
+            isPlaybackMode = true;
+            currentPlaybackStep = 0;
+            moves = 0;
+
+            document.querySelector('.controls').style.display = 'none';
+            document.getElementById('playback-controls').style.display = 'flex';
+
+            const slider = document.getElementById('playback-slider');
+            slider.min = 0;
+            slider.max = solutionPath.length;
+            slider.value = 0;
+
+            updatePlaybackUI();
+            updateMessage(`Found solution in ${solutionPath.length} moves. Explored ${statesExplored} states.`);
+
+            if (!isPlaybackPlaying) togglePlaybackPlay();
+        }
+
+        function exitPlaybackMode() {
+            isPlaybackMode = false;
+            if (isPlaybackPlaying) togglePlaybackPlay();
+
+            document.querySelector('.controls').style.display = 'flex';
+            document.getElementById('playback-controls').style.display = 'none';
+
+            updateMessage('');
+            clearSolveExecution();
+            gameState = JSON.parse(JSON.stringify(playbackStateHistory[currentPlaybackStep]));
+            render();
+            initialUpdate();
+        }
+
+        function updatePlaybackUI() {
+            document.getElementById('playback-slider').value = currentPlaybackStep;
+            document.getElementById('playback-step-text').textContent = `${currentPlaybackStep} / ${solutionPath.length}`;
+            document.getElementById('move-count').textContent = currentPlaybackStep;
+
+            gameState = JSON.parse(JSON.stringify(playbackStateHistory[currentPlaybackStep]));
+
+            selectedTubeIndex = null;
+            if (currentPlaybackStep < solutionPath.length) {
+                selectedTubeIndex = solutionPath[currentPlaybackStep].from;
+            }
+
+            render();
+
+            if (currentPlaybackStep === solutionPath.length) {
+                if (isPlaybackPlaying) togglePlaybackPlay();
+                updateMessage('Solution playback finished!');
+            } else {
+                updateMessage(`Viewing Step: ${currentPlaybackStep}`);
+            }
+        }
+
+        document.getElementById('playback-slider').addEventListener('input', (e) => {
+            if (isPlaybackPlaying) togglePlaybackPlay();
+            currentPlaybackStep = parseInt(e.target.value);
+            updatePlaybackUI();
+        });
+
+        document.getElementById('btn-step-prev').addEventListener('click', () => {
+            if (isPlaybackPlaying) togglePlaybackPlay();
+            if (currentPlaybackStep > 0) {
+                currentPlaybackStep--;
+                updatePlaybackUI();
+            }
+        });
+
+        document.getElementById('btn-step-next').addEventListener('click', () => {
+            if (isPlaybackPlaying) togglePlaybackPlay();
+            if (currentPlaybackStep < solutionPath.length) {
+                currentPlaybackStep++;
+                updatePlaybackUI();
+            }
+        });
+
+        function togglePlaybackPlay() {
+            const playBtn = document.getElementById('btn-play-pause');
+            if (isPlaybackPlaying) {
+                isPlaybackPlaying = false;
+                playBtn.textContent = '▶';
+                clearInterval(solveInterval);
+                solveInterval = null;
+            } else {
+                if (currentPlaybackStep >= solutionPath.length) currentPlaybackStep = 0;
+                isPlaybackPlaying = true;
+                playBtn.textContent = '⏸';
+
+                updatePlaybackUI();
+                solveInterval = setInterval(() => {
+                    currentPlaybackStep++;
+                    updatePlaybackUI();
+                }, 800);
+            }
+        }
+
+        document.getElementById('btn-play-pause').addEventListener('click', togglePlaybackPlay);
+        document.getElementById('btn-close-playback').addEventListener('click', exitPlaybackMode);
+
+        createWorker();
+        initGame();
+
+    </script>
+</body>
+
+</html>
