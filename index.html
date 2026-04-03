@@ -776,6 +776,7 @@
         <button id="btn-undo" class="btn-secondary" disabled>Undo</button>
         <button id="btn-hint" class="btn-secondary">Hint</button>
         <button id="btn-solve" class="btn-secondary">Show Optimal Play</button>
+        <button id="btn-share" class="btn-secondary">🔗 Share</button>
         <button id="btn-edit" class="btn-secondary">Level Editor</button>
     </div>
 
@@ -801,6 +802,8 @@
             <p>In <span id="win-moves">0</span> moves</p>
             <div class="win-buttons">
                 <button id="btn-win-replay" class="btn-secondary">Play Again</button>
+                <button id="btn-win-restart">Restart</button>
+                <button id="btn-win-share" class="btn-secondary">🔗 Share Level</button>
                 <button id="btn-win-restart">Restart</button>
             </div>
         </div>
@@ -937,6 +940,81 @@
             self.postMessage(res);
         };
         `;
+
+        // ── URL Level Sharing ──────────────────────────────────────────────
+
+        function encodeStateToURL() {
+            // Each tube = 4 chars (label or '_'), tubes joined by '-'
+            // Example: VGRB-OSCL-Y__P-____
+            return initialGameState.map(tube => {
+                return Array.from({ length: TUBE_CAPACITY }, (_, i) => tube[i] || null)
+                    .map(c => c ? getColorLabel(c) : '_')
+                    .join('');
+            }).join('-');
+        }
+
+        function decodeStateFromURL(str) {
+            return str.split('-').map(tubeStr => {
+                return tubeStr.split('').map(ch => {
+                    if (ch === '_') return null;
+                    let cfg = COLOR_CONFIG.find(c => c.label === ch.toUpperCase());
+                    return cfg ? cfg.hex : null;
+                }).filter(c => c !== null);
+            });
+        }
+
+        function loadLevelFromURL() {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const levelParam = params.get('level');
+                if (!levelParam) return false;
+                const decoded = decodeStateFromURL(levelParam);
+                // Validate: must have correct tube count and only known colors
+                if (decoded.length !== TUBE_COUNT) return false;
+                gameState = decoded;
+                initialGameState = JSON.parse(JSON.stringify(gameState));
+                moves = 0;
+                clearHistory();
+                initialUpdate();
+                render();
+                updateMessage('📎 Custom level loaded from link!');
+                setTimeout(() => updateMessage(''), 3000);
+                return true;
+            } catch (e) {
+                console.warn('Invalid level URL param:', e);
+                return false;
+            }
+        }
+
+        function shareLevel() {
+            const code = encodeStateToURL();
+            const url = window.location.origin + window.location.pathname + '?level=' + code;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(() => {
+                    updateMessage('🔗 Share link copied to clipboard!');
+                    setTimeout(() => updateMessage(''), 3000);
+                }).catch(() => fallbackCopyShare(url));
+            } else {
+                fallbackCopyShare(url);
+            }
+        }
+
+        function fallbackCopyShare(url) {
+            // Fallback for http or older browsers
+            const ta = document.createElement('textarea');
+            ta.value = url;
+            ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+            document.body.appendChild(ta);
+            ta.focus(); ta.select();
+            try {
+                document.execCommand('copy');
+                updateMessage('🔗 Share link copied to clipboard!');
+            } catch (e) {
+                updateMessage('🔗 Copy this link: ' + url);
+            }
+            document.body.removeChild(ta);
+            setTimeout(() => updateMessage(''), 4000);
+        }
 
         function createWorker() {
             if (window.solverWorker) {
@@ -1261,6 +1339,8 @@
             return newState;
         }
 
+        document.getElementById('btn-share').addEventListener('click', shareLevel);
+        document.getElementById('btn-win-share').addEventListener('click', shareLevel);
         document.getElementById('btn-edit').addEventListener('click', toggleEditMode);
         document.getElementById('btn-clear').addEventListener('click', () => {
             gameState = Array.from({ length: TUBE_COUNT }, () => Array(TUBE_CAPACITY).fill(null));
@@ -1374,6 +1454,10 @@
                 moves = 0;
                 initialUpdate();
                 render();
+                // Update URL so this custom layout is shareable
+                const levelCode = encodeStateToURL();
+                const newURL = window.location.pathname + '?level=' + levelCode;
+                window.history.replaceState(null, '', newURL);
             }
         }
 
@@ -1612,7 +1696,10 @@
         document.getElementById('btn-close-playback').addEventListener('click', exitPlaybackMode);
 
         createWorker();
-        initGame();
+        // Load from URL param if present, otherwise start a fresh game
+        if (!loadLevelFromURL()) {
+            initGame();
+        }
 
     </script>
 </body>
