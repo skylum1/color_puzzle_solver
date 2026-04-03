@@ -423,6 +423,17 @@
             display: none !important;
         }
 
+        /* Highlight best-count when player matches or beats optimal */
+        #best-count.at-optimal {
+            color: var(--color-success);
+            font-weight: 700;
+        }
+
+        #best-count.beat-optimal {
+            color: var(--color-hint);
+            font-weight: 700;
+        }
+
         /* Show editor elements */
         body.edit-mode #editor-toolbar {
             display: flex;
@@ -729,6 +740,8 @@
 
     <div id="stats">
         Moves: <span id="move-count">0</span>
+        <span id="best-divider" style="margin: 0 10px; opacity: 0.4;">|</span>
+        Best: <span id="best-count" title="Optimal minimum moves for this puzzle">…</span>
     </div>
 
     <!-- Slim title strip, visible only in edit mode -->
@@ -804,7 +817,7 @@
                 <button id="btn-win-replay" class="btn-secondary">Play Again</button>
                 <button id="btn-win-restart">Restart</button>
                 <button id="btn-win-share" class="btn-secondary">🔗 Share Level</button>
-                
+
             </div>
         </div>
     </div>
@@ -849,6 +862,7 @@
         let solveTimeout = null;
         let currentSolveAction = null;
         let solveGeneration = 0;
+        let optimalMoves = null;
 
         let isEditMode = false;
         let editSelectedColor = null;
@@ -981,6 +995,7 @@
                 clearHistory();
                 initialUpdate();
                 render();
+                computeOptimalCount();
                 updateMessage('📎 Custom level loaded from link!');
                 setTimeout(() => updateMessage(''), 3000);
                 return true;
@@ -1029,6 +1044,40 @@
             window.solverWorker.onmessage = handleWorkerMessage;
         }
 
+        function updateBestCount() {
+            const el = document.getElementById('best-count');
+            el.textContent = optimalMoves !== null ? optimalMoves : '…';
+        }
+
+        function updateBestCountHighlight() {
+            if (optimalMoves === null) return;
+            const el = document.getElementById('best-count');
+            el.classList.remove('at-optimal', 'beat-optimal');
+            if (moves === optimalMoves) el.classList.add('at-optimal');
+            else if (moves > optimalMoves) el.classList.add('beat-optimal');
+        }
+
+        function computeOptimalCount() {
+            // Silently run solver in background to get minimum move count
+            if (isSolving) return;
+            optimalMoves = null;
+            updateBestCount();
+            isSolving = true;
+            currentSolveAction = 'count';
+            solveGeneration++;
+            const currentGen = solveGeneration;
+            window.solverWorker.postMessage(JSON.parse(JSON.stringify(gameState)));
+            solveTimeout = setTimeout(() => {
+                if (isSolving && currentSolveAction === 'count' && solveGeneration === currentGen) {
+                    window.solverWorker.terminate();
+                    createWorker();
+                    isSolving = false;
+                    currentSolveAction = null;
+                    document.getElementById('best-count').textContent = '?';
+                }
+            }, 12000);
+        }
+
         function initialUpdate() {
             updateMessage('');
             document.getElementById('move-count').textContent = moves;
@@ -1074,6 +1123,7 @@
             moves = 0;
             initialUpdate();
             render();
+            computeOptimalCount();
         }
 
         function restartGame() {
@@ -1222,6 +1272,7 @@
                         document.getElementById('move-count').textContent = moves;
                         selectedTubeIndex = null;
                         render();
+                        updateBestCountHighlight();
 
                         if (checkWin()) {
                             showWinCelebration();
@@ -1487,6 +1538,7 @@
                 moves = 0;
                 initialUpdate();
                 render();
+                computeOptimalCount();
                 // Update URL so this custom layout is shareable
                 const levelCode = encodeStateToURL();
                 const newURL = window.location.pathname + '?level=' + levelCode;
@@ -1557,6 +1609,13 @@
         }
 
         function startSolverWorker(actionStr, timeoutMsg) {
+            // If a background count solve is running, cancel it and get a fresh worker
+            if (currentSolveAction === 'count') {
+                clearTimeout(solveTimeout);
+                isSolving = false;
+                currentSolveAction = null;
+                createWorker();
+            }
             isSolving = true;
             solveGeneration++;
             currentSolveAction = actionStr;
@@ -1584,6 +1643,16 @@
             if (!isSolving) return;
             let path = e.data ? e.data.path : null;
             let statesExplored = e.data ? e.data.statesExplored : 0;
+
+            if (currentSolveAction === 'count') {
+                clearTimeout(solveTimeout);
+                isSolving = false;
+                currentSolveAction = null;
+                optimalMoves = (path && path.length > 0) ? path.length : (path ? 0 : null);
+                document.getElementById('best-count').textContent =
+                    optimalMoves !== null ? optimalMoves : '?';
+                return;
+            }
 
             if (currentSolveAction === 'playback') {
                 if (!path) {
