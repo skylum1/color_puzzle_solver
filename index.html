@@ -362,7 +362,7 @@
 
         #win-overlay.active {
             opacity: 1;
-            pointer-events: all;
+            pointer-events: auto;
         }
 
         .win-card {
@@ -787,10 +787,10 @@
         </div>
         <input type="range" id="playback-slider" min="0" max="0" value="0">
         <div class="playback-buttons">
-            <button id="btn-play-pause" class="btn-icon">▶</button>
-            <button id="btn-step-prev" class="btn-icon">◀</button>
+            <button id="btn-play-pause" class="btn-icon" title="Play / Pause">▶</button>
+            <button id="btn-step-prev" class="btn-icon" title="Previous Step">⏮</button>
             <span id="playback-step-text">0 / 0</span>
-            <button id="btn-step-next" class="btn-icon">▶</button>
+            <button id="btn-step-next" class="btn-icon" title="Next Step">⏭</button>
             <button id="btn-close-playback" class="btn-secondary"
                 style="margin-left: 10px; padding: 5px 10px;">Exit</button>
         </div>
@@ -804,7 +804,7 @@
                 <button id="btn-win-replay" class="btn-secondary">Play Again</button>
                 <button id="btn-win-restart">Restart</button>
                 <button id="btn-win-share" class="btn-secondary">🔗 Share Level</button>
-                <button id="btn-win-restart">Restart</button>
+                
             </div>
         </div>
     </div>
@@ -946,7 +946,11 @@
         function encodeStateToURL() {
             // Each tube = 4 chars (label or '_'), tubes joined by '-'
             // Example: VGRB-OSCL-Y__P-____
-            return initialGameState.map(tube => {
+            // In edit mode encode the live gameState (compacted); otherwise use initialGameState
+            const stateToEncode = isEditMode
+                ? gameState.map(tube => tube.filter(c => c !== null).slice(0, TUBE_CAPACITY))
+                : initialGameState;
+            return stateToEncode.map(tube => {
                 return Array.from({ length: TUBE_CAPACITY }, (_, i) => tube[i] || null)
                     .map(c => c ? getColorLabel(c) : '_')
                     .join('');
@@ -1084,14 +1088,22 @@
         }
 
         function shuffle(state) {
-            const iterations = 60;
-            for (let i = 0; i < iterations; i++) {
-                const fromIdx = Math.floor(Math.random() * TUBE_COUNT);
-                const toIdx = Math.floor(Math.random() * TUBE_COUNT);
-
-                if (fromIdx !== toIdx && state[fromIdx].length > 0 && state[toIdx].length < TUBE_CAPACITY) {
-                    const color = state[fromIdx].pop();
-                    state[toIdx].push(color);
+            // Collect all colors into a flat array, Fisher-Yates shuffle, redistribute
+            let flat = [];
+            for (let tube of state) {
+                for (let c of tube) flat.push(c);
+                tube.length = 0;
+            }
+            for (let i = flat.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [flat[i], flat[j]] = [flat[j], flat[i]];
+            }
+            // Fill the first (TUBE_COUNT - 2) tubes with TUBE_CAPACITY colors each
+            // Leave the last 2 tubes empty (buffer tubes)
+            let idx = 0;
+            for (let t = 0; t < state.length - 2; t++) {
+                for (let s = 0; s < TUBE_CAPACITY; s++) {
+                    state[t].push(flat[idx++]);
                 }
             }
         }
@@ -1151,6 +1163,7 @@
                             visualArr.push('empty');
                         }
                     }
+                    visualArr.reverse(); // read top-to-bottom (pourable color first)
                     tubeEl.setAttribute('aria-label', `Tube ${tubeIndex + 1}: ${visualArr.join(', ')}`);
 
                     tubeEl.addEventListener('click', () => handleTubeClick(tubeIndex));
@@ -1214,7 +1227,7 @@
                             showWinCelebration();
                         }
                     } else {
-                        // Invalid move
+                        // Invalid move — shake the selected tube and clear selection
                         shakingTubeIndex = selectedTubeIndex;
                         let currentSelected = selectedTubeIndex;
                         setTimeout(() => {
@@ -1223,9 +1236,7 @@
                             if (el) el.classList.remove('shake');
                         }, 320);
 
-                        if (gameState[tubeIndex].length > 0 && selectedTubeIndex !== tubeIndex) {
-                            selectedTubeIndex = tubeIndex;
-                        }
+                        selectedTubeIndex = null;
                         render();
                     }
                 }
@@ -1251,6 +1262,8 @@
         }
 
         function checkWin() {
+            const totalColors = gameState.reduce((s, t) => s + t.length, 0);
+            if (totalColors === 0) return false;
             for (let tube of gameState) {
                 if (tube.length > 0) {
                     if (tube.length !== TUBE_CAPACITY) return false;
@@ -1437,6 +1450,26 @@
                 checkEditValidation();
                 render();
             } else {
+                // Validate layout before allowing play
+                let counts = {};
+                for (let tube of gameState) {
+                    for (let c of tube) {
+                        if (!c) continue;
+                        counts[c] = (counts[c] || 0) + 1;
+                    }
+                }
+                const invalidColors = COLORS.filter(c => counts[c] && counts[c] !== TUBE_CAPACITY);
+                if (invalidColors.length > 0) {
+                    const name = invalidColors.map(c => getColorName(c) + ' (' + counts[c] + ')').join(', ');
+                    const msgEl = document.getElementById('edit-message');
+                    msgEl.textContent = `Fix counts before playing: ${name} (each needs exactly ${TUBE_CAPACITY}).`;
+                    msgEl.style.color = 'var(--color-error)';
+                    isEditMode = true; // revert the toggle
+                    document.body.classList.add('edit-mode');
+                    btnEdit.textContent = 'Play Custom Level';
+                    btnEdit.classList.remove('btn-secondary');
+                    return;
+                }
                 document.body.classList.remove('edit-mode');
                 btnEdit.textContent = 'Level Editor';
                 btnEdit.classList.add('btn-secondary');
