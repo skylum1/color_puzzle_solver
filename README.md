@@ -1,6 +1,10 @@
+
 # 🧪 Color Sort Puzzle — Optimal Solver
 
+<h4>
+    <a href="https://skylum1.github.io/color_puzzle_solver/">View Demo</a> 
 
+</h4>
 
 A browser-based solver for puzzles posted on [r/ColorPuzzleGame](https://www.reddit.com/r/ColorPuzzleGame/). Drop in any puzzle layout from the subreddit, get the **guaranteed minimum move solution**, and step through it interactively.
 
