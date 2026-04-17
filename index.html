@@ -434,6 +434,30 @@
             font-weight: 700;
         }
 
+        #btn-live-toggle {
+            transition: opacity 0.2s, color 0.2s;
+        }
+
+        #btn-live-toggle:hover {
+            opacity: 1 !important;
+            color: var(--secondary-color);
+        }
+
+        #btn-live-toggle[aria-expanded="true"] {
+            opacity: 1 !important;
+            color: var(--text-color);
+        }
+
+        #btn-live-toggle[aria-expanded="true"] #live-best-count {
+            color: var(--secondary-color);
+            font-weight: 700;
+        }
+
+        #live-best-count.solving {
+            color: #888;
+            font-weight: normal;
+        }
+
         /* Show editor elements */
         body.edit-mode #editor-toolbar {
             display: flex;
@@ -742,6 +766,12 @@
         Moves: <span id="move-count">0</span>
         <span id="best-divider" style="margin: 0 10px; opacity: 0.4;">|</span>
         Best: <span id="best-count" title="Optimal minimum moves for this puzzle">…</span>
+        <span id="best-divider2" style="margin: 0 10px; opacity: 0.4;">|</span>
+        <button id="btn-live-toggle" title="Click to see best possible total moves to finish from current position"
+            onclick="toggleLiveBest()" aria-expanded="false"
+            style="background:transparent;border:none;padding:0;font:inherit;color:inherit;cursor:pointer;opacity:0.55;font-size:inherit;">
+            Best Possible: <span id="live-best-count">tap to show</span>
+        </button>
     </div>
 
     <!-- Slim title strip, visible only in edit mode -->
@@ -863,6 +893,9 @@
         let currentSolveAction = null;
         let solveGeneration = 0;
         let optimalMoves = null;
+        let liveOptimalMoves = null;
+        let isLiveBestVisible = false;
+        let liveCountGeneration = 0;
 
         let isEditMode = false;
         let editSelectedColor = null;
@@ -1059,6 +1092,74 @@
             else if (moves > optimalMoves) el.classList.add('beat-optimal');
         }
 
+        function toggleLiveBest() {
+            isLiveBestVisible = !isLiveBestVisible;
+            const btn = document.getElementById('btn-live-toggle');
+            btn.setAttribute('aria-expanded', isLiveBestVisible ? 'true' : 'false');
+            if (isLiveBestVisible) {
+                computeLiveOptimal();
+            } else {
+                liveOptimalMoves = null;
+                const el = document.getElementById('live-best-count');
+                el.textContent = 'tap to show';
+                el.className = '';
+            }
+        }
+
+        function updateLiveBestCount() {
+            const el = document.getElementById('live-best-count');
+            if (!isLiveBestVisible) {
+                el.textContent = 'tap to show';
+                el.className = '';
+                return;
+            }
+            if (liveOptimalMoves === null) {
+                el.textContent = 'N/A';
+                el.className = 'solving';
+            } else {
+                // Best Possible = moves already played + optimal moves still needed
+                el.textContent = moves + liveOptimalMoves;
+                el.className = '';
+            }
+        }
+
+        function computeLiveOptimal() {
+            if (!isLiveBestVisible || isPlaybackMode) return;
+            // Cancel any in-flight live worker
+            if (window.liveWorkerInstance) { window.liveWorkerInstance.terminate(); window.liveWorkerInstance = null; }
+            if (window.liveWorkerTimeout) { clearTimeout(window.liveWorkerTimeout); window.liveWorkerTimeout = null; }
+            liveOptimalMoves = null;
+            updateLiveBestCount();
+            liveCountGeneration++;
+            const gen = liveCountGeneration;
+            // Snapshot state NOW before any async ops
+            const stateSnapshot = JSON.parse(JSON.stringify(gameState));
+            const liveBlob = new Blob([solverWorkerCode], { type: 'application/javascript' });
+            const liveWorker = new Worker(URL.createObjectURL(liveBlob));
+            window.liveWorkerInstance = liveWorker;
+            liveWorker.postMessage(stateSnapshot);
+            window.liveWorkerTimeout = setTimeout(() => {
+                liveWorker.terminate();
+                window.liveWorkerInstance = null;
+                if (gen === liveCountGeneration) {
+                    liveOptimalMoves = null;
+                    const el = document.getElementById('live-best-count');
+                    if (el) { el.textContent = '?'; el.className = ''; }
+                }
+            }, 10000);
+            liveWorker.onmessage = (e) => {
+                clearTimeout(window.liveWorkerTimeout);
+                window.liveWorkerTimeout = null;
+                liveWorker.terminate();
+                window.liveWorkerInstance = null;
+                if (gen !== liveCountGeneration) return;
+                const path = e.data ? e.data.path : null;
+                // path.length = moves needed FROM current position = remaining
+                liveOptimalMoves = path ? path.length : null;
+                updateLiveBestCount();
+            };
+        }
+
         function computeOptimalCount() {
             // Silently run solver in background to get minimum move count
             if (isSolving) return;
@@ -1083,6 +1184,9 @@
         function initialUpdate() {
             updateMessage('');
             document.getElementById('move-count').textContent = moves;
+            liveOptimalMoves = null;
+            updateLiveBestCount();
+            if (isLiveBestVisible) computeLiveOptimal();
         }
 
         function clearHistory() {
@@ -1103,6 +1207,7 @@
             selectedTubeIndex = null;
             document.getElementById('btn-undo').disabled = moveHistory.length === 0;
             render();
+            computeLiveOptimal();
         }
 
         function initGame() {
@@ -1275,6 +1380,7 @@
                         selectedTubeIndex = null;
                         render();
                         updateBestCountHighlight();
+                        computeLiveOptimal();
 
                         if (checkWin()) {
                             showWinCelebration();
@@ -1702,7 +1808,6 @@
             isSolving = false;
             isPlaybackMode = true;
             currentPlaybackStep = 0;
-            // Save pre-playback state and move count so we can restore on exit
             prePlaybackGameState = JSON.parse(JSON.stringify(gameState));
             prePlaybackMoves = moves;
 
@@ -1729,7 +1834,6 @@
 
             updateMessage('');
             clearSolveExecution();
-            // Restore to the exact state and move count from before entering playback
             gameState = JSON.parse(JSON.stringify(prePlaybackGameState));
             moves = prePlaybackMoves;
             prePlaybackGameState = null;
