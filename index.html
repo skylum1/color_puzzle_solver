@@ -1206,6 +1206,7 @@
             document.getElementById('move-count').textContent = moves;
             selectedTubeIndex = null;
             document.getElementById('btn-undo').disabled = moveHistory.length === 0;
+            updateMessage('');
             render();
             computeLiveOptimal();
         }
